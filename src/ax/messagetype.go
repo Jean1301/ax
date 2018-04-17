@@ -53,7 +53,7 @@ func (mt MessageType) New() Message {
 	return reflect.New(mt.StructType).Interface().(Message)
 }
 
-// Package returns the Protocol Buffers package name for this message type.
+// PackageName returns the Protocol Buffers package name for this message type.
 func (mt MessageType) PackageName() string {
 	i := strings.LastIndexByte(mt.Name, '.')
 	if i == -1 {
@@ -78,7 +78,18 @@ type MessageTypeSet struct {
 	members map[MessageType]struct{}
 }
 
-// TypesOf returns the message types of the elements in m.
+// NewMessageTypeSet returns a set containing the message types in mt.
+func NewMessageTypeSet(mt ...MessageType) MessageTypeSet {
+	members := make(map[MessageType]struct{}, len(mt))
+
+	for _, v := range mt {
+		members[v] = struct{}{}
+	}
+
+	return MessageTypeSet{members}
+}
+
+// TypesOf returns a set containing the message types of the elements in m.
 func TypesOf(m ...Message) MessageTypeSet {
 	members := make(map[MessageType]struct{}, len(m))
 

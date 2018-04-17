@@ -89,11 +89,7 @@ var _ = Describe("MessageType", func() {
 
 	Describe("ToSet", func() {
 		It("returns a set containing only this message type", func() {
-			Expect(
-				message.ToSet(),
-			).To(Equal(
-				TypesOf(&messagetest.Message{}),
-			))
+			Expect(message.ToSet()).To(Equal(TypesOf(&messagetest.Message{})))
 		})
 	})
 
@@ -111,6 +107,138 @@ var _ = Describe("MessageType", func() {
 		It("returns an empty string if the message is not in a package", func() {
 			mt := TypeOf(&messagetest.NoPackage{})
 			Expect(mt.PackageName()).To(Equal(""))
+		})
+	})
+})
+
+var _ = Describe("MessageTypeSet", func() {
+	message := TypeOf(&messagetest.Message{})
+	command := TypeOf(&messagetest.Command{})
+	event := TypeOf(&messagetest.Event{})
+
+	Describe("NewMessageTypeSet", func() {
+		It("returns a set containing the the arguments", func() {
+			Expect(
+				NewMessageTypeSet(
+					message,
+					command,
+				).Members(),
+			).To(ConsistOf(
+				message,
+				command,
+			))
+		})
+
+		It("deduplicates repeated types", func() {
+			Expect(
+				NewMessageTypeSet(
+					message,
+					message,
+				).Len(),
+			).To(Equal(1))
+		})
+
+		It("returns an empty set when called with no arguments", func() {
+			Expect(NewMessageTypeSet().Len()).To(Equal(0))
+		})
+	})
+
+	Describe("TypesOf", func() {
+		It("returns a set containing the message types of the arguments", func() {
+			Expect(
+				TypesOf(
+					&messagetest.Message{},
+					&messagetest.Command{},
+				).Members(),
+			).To(ConsistOf(
+				message,
+				command,
+			))
+		})
+
+		It("deduplicates repeated types", func() {
+			Expect(
+				TypesOf(
+					&messagetest.Message{},
+					&messagetest.Message{},
+				).Len(),
+			).To(Equal(1))
+		})
+
+		It("returns an empty set when called with no arguments", func() {
+			Expect(TypesOf().Len()).To(Equal(0))
+		})
+	})
+
+	Describe("Has", func() {
+		set := TypesOf(&messagetest.Message{})
+
+		It("returns true if the message type is a member of the set", func() {
+			Expect(set.Has(message)).To(BeTrue())
+		})
+
+		It("returns false if the message type is a member of the set", func() {
+			Expect(set.Has(command)).To(BeFalse())
+		})
+	})
+
+	Describe("Add", func() {
+		set := TypesOf(&messagetest.Message{})
+
+		It("returns a set containing the message type", func() {
+			Expect(set.Add(command)).To(Equal(
+				NewMessageTypeSet(
+					message,
+					command,
+				),
+			))
+		})
+
+		It("does not modify the original set", func() {
+			set.Add(command)
+
+			Expect(set.Members()).To(ConsistOf(message))
+		})
+
+		It("returns the original set if the message type is already a member", func() {
+			Expect(set.Add(message)).To(Equal(set))
+		})
+	})
+
+	Describe("Add", func() {
+		setA := TypesOf(
+			&messagetest.Message{},
+			&messagetest.Command{},
+		)
+
+		setB := TypesOf(
+			&messagetest.Command{},
+			&messagetest.Event{},
+		)
+
+		It("returns the union of two sets", func() {
+			set := setA.Union(setB)
+
+			Expect(set.Members()).To(ConsistOf(
+				message,
+				command,
+				event,
+			))
+		})
+
+		It("does not modify the original sets", func() {
+			setA.Union(setB)
+
+			Expect(setA.Members()).To(ConsistOf(message, command))
+			Expect(setB.Members()).To(ConsistOf(command, event))
+		})
+
+		It("returns the LHS if the RHS is empty", func() {
+			Expect(setA.Union(NewMessageTypeSet())).To(Equal(setA))
+		})
+
+		It("returns the RHS if the LHS is empty", func() {
+			Expect(NewMessageTypeSet().Union(setA)).To(Equal(setA))
 		})
 	})
 })
