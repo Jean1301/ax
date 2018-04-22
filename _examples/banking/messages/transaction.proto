@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package ax.examples.banking;
+option go_package = "messages";
+
+message TransactionStarted {
+    string transaction_id = 1;
+    int64 cents = 2;
+
+    oneof details {
+        TransferDetails transfer = 3;
+    }
+
+    message TransferDetails {
+        string from_account_id = 1;
+        string to_account_id = 2;
+    }
+}
+
+// TransactionApproved is an event that occurs when a transaction of any type
+// is completed successfully.
+message TransactionApproved {
+    string transaction_id = 1;
+}
+
+// TransactionDeclined is an event that occurs when a transaction of any type
+// is completed without a funds exchange taking place.
+message TransactionDeclined {
+    string transaction_id = 1;
+}

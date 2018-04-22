@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package ax.eventsourcing;
+option go_package = "eventsourcing";
+
+// CommandHandled is an event written to an aggregate's stream to indicate
+// that a specific command message has been handled.
+//
+// Handled means that the aggregate command handler has received the message
+// and returned a nil error, or a DomainError.
+message CommandHandled {
+    string command_id = 1;
+}
+
+// CommandEventsPublished is an event written to an aggregate's stream to
+// indicate that the events produced by a specific command have been published
+// via the message transport layer.
+message CommandEventsPublished {
+    string command_id = 1;
+}
