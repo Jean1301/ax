@@ -1,6 +1,8 @@
-hash: 5ca4578e65c2ab8dad4cc682bef93a199ecfaf69506c6e8edb6a0ec0a56cb85d
-updated: 2018-04-17T09:19:13.338539768+10:00
+hash: 8052c7578c87d35fe44ba661cd90d24b01e5f78c1ed8e65f35e31202638147a5
+updated: 2018-04-22T13:56:13.237507+10:00
 imports:
+- name: github.com/go-sql-driver/mysql
+  version: 3287d94d4c6a48a63e16fffaabf27ab20203af2a
 - name: github.com/golang/protobuf
   version: 925541529c1fa6821df4e44ce2723319eb2be768
   subpackages:
@@ -9,6 +11,10 @@ imports:
   version: f58768cc1a7a7e77a3bd49e98cdd21419399b6a3
 - name: github.com/streadway/amqp
   version: 8e4aba63da9fc5571e01c6a45dc809a58cbc5a68
+- name: google.golang.org/appengine
+  version: 0a24098c0ec68416ec050f567f75df563d6b231e
+  subpackages:
+  - cloudsql
 testImports:
 - name: github.com/onsi/ginkgo
   version: 9eda700730cba42af70d53180f9dcce9266bc2bc
