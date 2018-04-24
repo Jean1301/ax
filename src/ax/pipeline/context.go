@@ -4,29 +4,36 @@ import (
 	"context"
 
 	"github.com/jmalloc/ax/src/ax"
+	"github.com/jmalloc/ax/src/ax/transport"
 )
 
-type messageContext struct {
+// MessageContext is an implementation of ax.MessageHandler that
+// appends outbound messages to a slice.
+type MessageContext struct {
 	context.Context
 
-	inbound  ax.InboundMessage
-	outbound []ax.OutboundMessage
+	In  transport.InboundMessage
+	Out []transport.OutboundMessage
 }
 
-func (c *messageContext) MessageEnvelope() ax.Envelope {
-	return c.env
+// MessageEnvelope returns the envelope containing the message being handled.
+func (c *MessageContext) MessageEnvelope() ax.Envelope {
+	return c.In.Envelope
 }
 
-func (c *messageContext) ExecuteCommand(m ax.Command) {
-	c.outbound = append(c.outbound, OutboundMessage{
-		Operation: OpExecute,
-		Envelope:  c.env.New(m),
+// ExecuteCommand enqueues a command to be executed.
+func (c *MessageContext) ExecuteCommand(m ax.Command) {
+	c.Out = append(c.Out, transport.OutboundMessage{
+		Operation:       transport.OpSendUnicast,
+		Envelope:        c.MessageEnvelope().New(m),
+		UnicastEndpoint: ax.TypeOf(m).PackageName(),
 	})
 }
 
-func (c *messageContext) PublishEvent(m ax.Event) {
-	c.outbound = append(c.outbound, OutboundMessage{
-		Operation: OpPublish,
-		Envelope:  c.env.New(m),
+// PublishEvent enqueues events to be published.
+func (c *MessageContext) PublishEvent(m ax.Event) {
+	c.Out = append(c.Out, transport.OutboundMessage{
+		Operation: transport.OpSendMulticast,
+		Envelope:  c.MessageEnvelope().New(m),
 	})
 }

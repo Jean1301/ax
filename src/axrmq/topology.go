@@ -5,8 +5,8 @@ import (
 	"github.com/streadway/amqp"
 )
 
-const sendExchange = "ax/send"
-const publishExchange = "ax/publish"
+const unicastExchange = "ax/unicast"
+const multicastExchange = "ax/multicast"
 
 // queueNames returns the name of the inbox and error queue to use for the
 // endpoint named ep.
@@ -16,7 +16,7 @@ func queueNames(ep string) (string, string) {
 
 // setupTopology declares all exchanges, queues and bindings for the endpoint
 // named ep.
-func setupTopology(ch *amqp.Channel, ep string, subscriptions ax.MessageTypeSet) error {
+func setupTopology(ch *amqp.Channel, ep string) error {
 	if err := setupExchanges(ch); err != nil {
 		return err
 	}
@@ -25,16 +25,12 @@ func setupTopology(ch *amqp.Channel, ep string, subscriptions ax.MessageTypeSet)
 		return err
 	}
 
-	if err := setupBindings(ch, ep, subscriptions); err != nil {
-		return err
-	}
-
 	return nil
 }
 
 func setupExchanges(ch *amqp.Channel) error {
 	if err := ch.ExchangeDeclare(
-		sendExchange,
+		unicastExchange,
 		"direct",
 		true,  // durable
 		false, // autoDelete
@@ -46,7 +42,7 @@ func setupExchanges(ch *amqp.Channel) error {
 	}
 
 	if err := ch.ExchangeDeclare(
-		publishExchange,
+		multicastExchange,
 		"direct",
 		true,  // durable
 		false, // autoDelete
@@ -78,6 +74,16 @@ func setupQueues(ch *amqp.Channel, ep string) error {
 		return err
 	}
 
+	if err := ch.QueueBind(
+		inbox,
+		ep,
+		unicastExchange,
+		false, // noWait
+		nil,   // args
+	); err != nil {
+		return err
+	}
+
 	if _, err := ch.QueueDeclare(
 		errors,
 		true,  // durable
@@ -92,30 +98,18 @@ func setupQueues(ch *amqp.Channel, ep string) error {
 	return nil
 }
 
-func setupBindings(ch *amqp.Channel, ep string, subscriptions ax.MessageTypeSet) error {
+func setupSubscriptionBindings(ch *amqp.Channel, ep string, subscriptions ax.MessageTypeSet) error {
 	inbox, _ := queueNames(ep)
 
-	if err := ch.QueueBind(
-		inbox,
-		ep,
-		sendExchange,
-		false, // noWait
-		nil,   // args
-	); err != nil {
-		return err
-	}
-
 	for _, mt := range subscriptions.Members() {
-		if mt.IsEvent() {
-			if err := ch.QueueBind(
-				inbox,
-				mt.Name,
-				publishExchange,
-				false, // noWait
-				nil,   // args
-			); err != nil {
-				return err
-			}
+		if err := ch.QueueBind(
+			inbox,
+			mt.Name,
+			multicastExchange,
+			false, // noWait
+			nil,   // args
+		); err != nil {
+			return err
 		}
 	}
 

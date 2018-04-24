@@ -6,7 +6,7 @@
 .PHONY: banking
 banking:
 	protoc --go_out=. examples/banking/messages/*.proto
-	# go run example/main.go $(RUN_ARGS)
+	go run examples/banking/main.go $(RUN_ARGS)
 
 %/messages.pb.go:
 	protoc --go_out=. $(@D)/*.proto

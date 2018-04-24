@@ -2,8 +2,10 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/jmalloc/ax/src/ax"
+	"github.com/jmalloc/ax/src/ax/transport"
 	"go.uber.org/multierr"
 )
 
@@ -13,14 +15,30 @@ type Router struct {
 	Routes RoutingTable
 }
 
+// Initialize configures the transport to subscribe to all messages in the
+// routing table.
+func (r *Router) Initialize(ctx context.Context, t transport.Transport) error {
+	var set ax.MessageTypeSet
+
+	for mt := range r.Routes {
+		if mt.IsEvent() {
+			set = set.Add(mt)
+		}
+	}
+
+	return t.Subscribe(ctx, set)
+}
+
+// DispatchMessage passes m to the appropriate message handlers according to the
+// routing table.
 func (r *Router) DispatchMessage(
 	ctx context.Context,
 	o OutboundStage,
-	m InboundMessage,
+	m transport.InboundMessage,
 ) error {
-	mc := &messageContext{
+	mc := &MessageContext{
 		Context: ctx,
-		inbound: m,
+		In:      m,
 	}
 
 	mt := ax.TypeOf(m.Envelope.Message)
@@ -76,6 +94,8 @@ type DuplicateRoutesError struct {
 }
 
 func (e DuplicateRoutesError) Error() string {
-	// // TODO:
-	panic("ni")
+	return fmt.Sprintf(
+		"can not build routing table, multiple message handlers are defined for the %s command",
+		e.MessageType.Name,
+	)
 }

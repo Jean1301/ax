@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"runtime"
-	"time"
 
 	"github.com/jmalloc/ax/src/ax"
 	"github.com/jmalloc/ax/src/ax/transport"
@@ -29,7 +28,7 @@ type Transport struct {
 }
 
 // Initialize sets up the transport to operate for a particular endpoint.
-func (t *Transport) Initialize(ctx context.Context, ep string, subscriptions ax.MessageTypeSet) error {
+func (t *Transport) Initialize(ctx context.Context, ep string) error {
 	ch, err := t.Conn.Channel()
 	if err != nil {
 		return err
@@ -42,7 +41,7 @@ func (t *Transport) Initialize(ctx context.Context, ep string, subscriptions ax.
 		}
 	}()
 
-	err = setupTopology(ch, ep, subscriptions)
+	err = setupTopology(ch, ep)
 	if err != nil {
 		return err
 	}
@@ -84,6 +83,11 @@ func (t *Transport) Initialize(ctx context.Context, ep string, subscriptions ax.
 	return nil
 }
 
+// Subscribe configures the transport to listen to messages of the given types.
+func (t *Transport) Subscribe(ctx context.Context, mt ax.MessageTypeSet) error {
+	return setupSubscriptionBindings(t.channel, t.endpoint, mt)
+}
+
 // Close stops and closes the transport.
 func (t *Transport) Close() error {
 	if t.channel == nil {
@@ -95,51 +99,51 @@ func (t *Transport) Close() error {
 
 // Receive returns the next message from the transport.
 // It blocks until a message is availble, or ctx is canceled.
-func (t *Transport) Receive(ctx context.Context) (*transport.InboundMessage, error) {
+func (t *Transport) Receive(ctx context.Context) (transport.InboundMessage, error) {
 	for {
 		select {
 		case del := <-t.messages:
-			env, err := t.receive(ctx, del)
-			if env != nil || err != nil {
-				return env, err
+			m, ok, err := t.receive(ctx, del)
+			if ok || err != nil {
+				return m, err
 			}
 		case err := <-t.closed:
-			return nil, err
+			return transport.InboundMessage{}, err
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return transport.InboundMessage{}, ctx.Err()
 		}
 	}
 }
 
-func (t *Transport) receive(ctx context.Context, del amqp.Delivery) (*transport.InboundMessage, error) {
+func (t *Transport) receive(
+	ctx context.Context,
+	del amqp.Delivery,
+) (transport.InboundMessage, bool, error) {
 	m := transport.InboundMessage{
-		Endpoint: del.ReplyTo,
-		Done: func(context.Context) error {
-			return del.Ack(false) // false = single message
-		},
-		Retry: func(context.Context) error {
-			if del.Redelivered {
-				time.Sleep(1 * time.Second)
+		Done: func(_ context.Context, op transport.InboundOperation) error {
+			switch op {
+			case transport.OpAck:
+				return del.Ack(false) // false = single message
+			case transport.OpRetry:
+				return del.Reject(true) // true = requeue
+			case transport.OpReject:
+				return del.Reject(false) // false = don't requeue
+			default:
+				panic(fmt.Sprintf("unrecognised inbound operation: %d", op))
 			}
-			return del.Reject(true) // false = don't requeue
 		},
 	}
 
 	if err := unmarshalMessage(del, &m.Envelope); err != nil {
-		// TODO: log/sentry/etc
-
-		if err := del.Reject(false); err != nil {
-			return nil, err
-		}
-
-		return nil, nil
+		// TODO: sentry, etc?
+		return transport.InboundMessage{}, false, del.Reject(false)
 	}
 
-	return &m, nil
+	return m, true, nil
 }
 
 // Send sends a message to a specific endpoint.
-func (t *Transport) Send(ctx context.Context, ep string, m *transport.OutboundMessage) error {
+func (t *Transport) Send(ctx context.Context, m transport.OutboundMessage) error {
 	var pub amqp.Publishing
 
 	if err := marshalMessage(m.Envelope, &pub); err != nil {
@@ -147,27 +151,37 @@ func (t *Transport) Send(ctx context.Context, ep string, m *transport.OutboundMe
 		return err
 	}
 
+	switch m.Operation {
+	case transport.OpSendUnicast:
+		return t.sendUnicast(ctx, m.UnicastEndpoint, pub)
+	case transport.OpSendMulticast:
+		return t.sendMulticast(ctx, pub)
+	default:
+		panic(fmt.Sprintf("unrecognised outbound operation: %d", m.Operation))
+	}
+}
+
+func (t *Transport) sendUnicast(
+	ctx context.Context,
+	ep string,
+	pub amqp.Publishing,
+) error {
 	return t.publisher.Publish(
 		ctx,
-		sendExchange,
+		unicastExchange,
 		ep,
 		true,
 		pub,
 	)
 }
 
-// Publish multicasts a message to any endpoints that are interested in
-// receiving it.
-func (t *Transport) Publish(ctx context.Context, m *transport.OutboundMessage) error {
-	var pub amqp.Publishing
-
-	if err := marshalMessage(m.Envelope, &pub); err != nil {
-		return err
-	}
-
+func (t *Transport) sendMulticast(
+	ctx context.Context,
+	pub amqp.Publishing,
+) error {
 	return t.publisher.Publish(
 		ctx,
-		publishExchange,
+		multicastExchange,
 		pub.Type,
 		false,
 		pub,
