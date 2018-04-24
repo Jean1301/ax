@@ -1,30 +1,23 @@
 package outbox
 
 import (
+	"context"
+
 	"github.com/jmalloc/ax/src/ax"
 )
 
-type MessageContext struct {
-	ax.MessageContext
-	Outbox *Outbox
+func WithTransaction(ctx context.Context, tx ax.Transaction) context.Context {
+	return context.WithValue(ctx, contextKey("tx"), tx)
 }
 
-// ExecuteCommand enqueues a command to be executed.
-func (c MessageContext) ExecuteCommand(m ax.Command) error {
-	c.Outbox.Operations = append(c.Outbox.Operations, Operation{
-		Op:      OpExecute,
-		Message: m,
-	})
+func GetTransaction(ctx context.Context) (ax.Transaction, bool) {
+	tx := ctx.Value(contextKey("tx"))
 
-	return nil
+	if tx == nil {
+		return nil, false
+	}
+
+	return tx.(ax.Transaction), true
 }
 
-// PublishEvent enqueues events to be published.
-func (c MessageContext) PublishEvent(m ax.Event) error {
-	c.Outbox.Operations = append(c.Outbox.Operations, Operation{
-		Op:      OpPublish,
-		Message: m,
-	})
-
-	return nil
-}
+type contextKey string

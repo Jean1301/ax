@@ -36,7 +36,7 @@ func (h *MessageHandler) HandleMessage(ctx ax.MessageContext, m ax.Message) erro
 	mk := h.Saga.MapMessage(m)
 	si := h.Saga.InitialState()
 
-	ok, err := h.Repository.Load(ctx, mt, mk, si)
+	ok, err := h.Repository.LoadSagaInstance(ctx, mt, mk, si)
 	if err != nil {
 		return err
 	}
@@ -51,9 +51,9 @@ func (h *MessageHandler) HandleMessage(ctx ax.MessageContext, m ax.Message) erro
 	}
 
 	// save the changes to the saga and its mapping table.
-	return h.Repository.Save(
+	return h.Repository.SaveSagaInstance(
 		ctx,
-		ctx.MessageTransaction(),
+		ctx.Transaction(),
 		si,
 		buildMappingTable(h.Saga, si),
 	)

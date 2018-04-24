@@ -3,8 +3,6 @@ package ax
 import (
 	"context"
 	"fmt"
-
-	"github.com/jmalloc/ax/src/ax/persistence"
 )
 
 // MessageHandler is an interface for types that handle messages.
@@ -27,14 +25,11 @@ type MessageContext interface {
 	// MessageEnvelope returns the envelope containing the message being handled.
 	MessageEnvelope() Envelope
 
-	// MessageTransaction returns the underlying message transaction.
-	Transaction() persistence.Transaction
-
 	// ExecuteCommand enqueues a command to be executed.
-	ExecuteCommand(Command) error
+	ExecuteCommand(Command)
 
 	// PublishEvent enqueues events to be published.
-	PublishEvent(Event) error
+	PublishEvent(Event)
 }
 
 // UnexpectedMessageError is an error returned by a handler when it receives a

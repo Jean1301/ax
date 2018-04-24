@@ -4,31 +4,35 @@ import (
 	"context"
 
 	"github.com/jmalloc/ax/src/ax"
-	"github.com/jmalloc/ax/src/ax/persistence"
+	"github.com/jmalloc/ax/src/ax/pipeline"
 )
 
-// Repository is an interface for loading and saving message outboxes from/to a
-// persistent data store.
+// Repository is an interface for manipulating the outgoing messages that
+// comprise an incoming message's outbox.
 type Repository interface {
-	// LoadOutbox loads the outbox for the given message ID.
+	// LoadOutbox loads the undispatched outbound messages that were generated
+	// when the given message was handled.
+	//
+	// ok is false if the message has not yet been handled.
 	LoadOutbox(
 		ctx context.Context,
-		tx persistence.Transaction,
 		id ax.MessageID,
-	) (Outbox, error)
+	) (ob []pipeline.OutboundMessage, ok bool, err error)
 
-	// SaveOutbox saves the outbox for the given message ID.
+	// SaveOutbox saves a set of undispatched outbound messages that were
+	// generated when the given message was handled. list of pending messages.
 	SaveOutbox(
 		ctx context.Context,
-		tx persistence.Transaction,
+		tx ax.Transaction,
 		id ax.MessageID,
-		ob Outbox,
+		ob []pipeline.OutboundMessage,
 	) error
 
-	// ClearOutbox removes all messages in the outbox for the given message ID.
-	ClearOutbox(
+	// MarkAsDispatched marks an OutboxMessage as dispatched, removing it from the
+	// list of pending messages.
+	MarkAsDispatched(
 		ctx context.Context,
-		tx persistence.Transaction,
-		id ax.MessageID,
+		tx ax.Transaction,
+		m pipeline.OutboundMessage,
 	) error
 }

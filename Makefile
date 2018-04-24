@@ -1,5 +1,5 @@
-REQ += src/ax/internal/messagetest/messages.pb.go
-REQ += src/ax/eventsourcing/messages.pb.go
+# REQ += src/ax/internal/messagetest/messages.pb.go
+# REQ += src/ax/eventsourcing/messages.pb.go
 
 -include artifacts/make/go/Makefile
 
