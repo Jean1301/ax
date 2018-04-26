@@ -4,7 +4,8 @@ import (
 	"context"
 
 	"github.com/jmalloc/ax/src/ax"
-	"github.com/jmalloc/ax/src/ax/pipeline"
+	"github.com/jmalloc/ax/src/ax/bus"
+	"github.com/jmalloc/ax/src/ax/persistence"
 )
 
 // Repository is an interface for manipulating the outgoing messages that
@@ -17,22 +18,22 @@ type Repository interface {
 	LoadOutbox(
 		ctx context.Context,
 		id ax.MessageID,
-	) (ob []pipeline.OutboundMessage, ok bool, err error)
+	) (ob []bus.OutboundMessage, ok bool, err error)
 
 	// SaveOutbox saves a set of undispatched outbound messages that were
 	// generated when the given message was handled. list of pending messages.
 	SaveOutbox(
 		ctx context.Context,
-		tx ax.Transaction,
+		tx persistence.Tx,
 		id ax.MessageID,
-		ob []pipeline.OutboundMessage,
+		ob []bus.OutboundMessage,
 	) error
 
 	// MarkAsDispatched marks an OutboxMessage as dispatched, removing it from the
 	// list of pending messages.
 	MarkAsDispatched(
 		ctx context.Context,
-		tx ax.Transaction,
-		m pipeline.OutboundMessage,
+		tx persistence.Tx,
+		m bus.OutboundMessage,
 	) error
 }

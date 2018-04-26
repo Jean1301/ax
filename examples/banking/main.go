@@ -2,16 +2,18 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/jmalloc/ax/examples/banking/messages"
 	"github.com/jmalloc/ax/src/ax"
+	"github.com/jmalloc/ax/src/ax/bus"
+	"github.com/jmalloc/ax/src/ax/bus/router"
 	"github.com/jmalloc/ax/src/ax/endpoint"
-	"github.com/jmalloc/ax/src/ax/pipeline"
-	"github.com/jmalloc/ax/src/ax/transport"
+	"github.com/jmalloc/ax/src/ax/outbox"
+	"github.com/jmalloc/ax/src/ax/persistence"
+	"github.com/jmalloc/ax/src/axmem"
 	"github.com/jmalloc/ax/src/axrmq"
 	"github.com/streadway/amqp"
 )
@@ -28,11 +30,12 @@ func (h *handler) MessageTypes() ax.MessageTypeSet {
 
 func (h *handler) HandleMessage(ctx ax.MessageContext, m ax.Message) error {
 	spew.Dump(m)
-	return errors.New("oh shit")
+	return nil
+	// return errors.New("oh shit")
 }
 
 func main() {
-	routes, err := pipeline.NewRoutingTable([]ax.MessageHandler{
+	routes, err := router.NewRoutingTable([]ax.MessageHandler{
 		&handler{},
 	})
 	if err != nil {
@@ -53,8 +56,14 @@ func main() {
 	ep := endpoint.Endpoint{
 		Name:      "ax.examples.banking",
 		Transport: transport,
-		InboundPipeline: &pipeline.Router{
-			Routes: routes,
+		InboundPipeline: &persistence.Injector{
+			DataStore: &axmem.DataStore{},
+			Next: &outbox.InboundStage{
+				Repository: &axmem.OutboxRepository{},
+				Next: &router.Router{
+					Routes: routes,
+				},
+			},
 		},
 	}
 
@@ -79,8 +88,8 @@ func do(ep *endpoint.Endpoint) {
 		AccountId: "billy-bob",
 	}
 
-	o := transport.OutboundMessage{
-		Operation:       transport.OpSendUnicast,
+	o := bus.OutboundMessage{
+		Operation:       bus.OpSendUnicast,
 		UnicastEndpoint: "ax.examples.banking",
 		Envelope:        env,
 	}

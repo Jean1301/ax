@@ -6,7 +6,7 @@ import (
 	"runtime"
 
 	"github.com/jmalloc/ax/src/ax"
-	"github.com/jmalloc/ax/src/ax/transport"
+	"github.com/jmalloc/ax/src/ax/bus"
 	"github.com/streadway/amqp"
 )
 
@@ -98,8 +98,8 @@ func (t *Transport) Close() error {
 }
 
 // Receive returns the next message from the transport.
-// It blocks until a message is availble, or ctx is canceled.
-func (t *Transport) Receive(ctx context.Context) (transport.InboundMessage, error) {
+// It blocks until a message is available, or ctx is canceled.
+func (t *Transport) Receive(ctx context.Context) (bus.InboundMessage, error) {
 	for {
 		select {
 		case del := <-t.messages:
@@ -108,9 +108,9 @@ func (t *Transport) Receive(ctx context.Context) (transport.InboundMessage, erro
 				return m, err
 			}
 		case err := <-t.closed:
-			return transport.InboundMessage{}, err
+			return bus.InboundMessage{}, err
 		case <-ctx.Done():
-			return transport.InboundMessage{}, ctx.Err()
+			return bus.InboundMessage{}, ctx.Err()
 		}
 	}
 }
@@ -118,32 +118,32 @@ func (t *Transport) Receive(ctx context.Context) (transport.InboundMessage, erro
 func (t *Transport) receive(
 	ctx context.Context,
 	del amqp.Delivery,
-) (transport.InboundMessage, bool, error) {
-	m := transport.InboundMessage{
-		Done: func(_ context.Context, op transport.InboundOperation) error {
+) (bus.InboundMessage, bool, error) {
+	m := bus.InboundMessage{
+		Done: func(_ context.Context, op bus.InboundOperation) error {
 			switch op {
-			case transport.OpAck:
+			case bus.OpAck:
 				return del.Ack(false) // false = single message
-			case transport.OpRetry:
+			case bus.OpRetry:
 				return del.Reject(true) // true = requeue
-			case transport.OpReject:
+			case bus.OpReject:
 				return del.Reject(false) // false = don't requeue
 			default:
-				panic(fmt.Sprintf("unrecognised inbound operation: %d", op))
+				panic(fmt.Sprintf("unrecognized inbound operation: %d", op))
 			}
 		},
 	}
 
 	if err := unmarshalMessage(del, &m.Envelope); err != nil {
 		// TODO: sentry, etc?
-		return transport.InboundMessage{}, false, del.Reject(false)
+		return bus.InboundMessage{}, false, del.Reject(false)
 	}
 
 	return m, true, nil
 }
 
 // Send sends a message to a specific endpoint.
-func (t *Transport) Send(ctx context.Context, m transport.OutboundMessage) error {
+func (t *Transport) Send(ctx context.Context, m bus.OutboundMessage) error {
 	var pub amqp.Publishing
 
 	if err := marshalMessage(m.Envelope, &pub); err != nil {
@@ -152,12 +152,12 @@ func (t *Transport) Send(ctx context.Context, m transport.OutboundMessage) error
 	}
 
 	switch m.Operation {
-	case transport.OpSendUnicast:
+	case bus.OpSendUnicast:
 		return t.sendUnicast(ctx, m.UnicastEndpoint, pub)
-	case transport.OpSendMulticast:
+	case bus.OpSendMulticast:
 		return t.sendMulticast(ctx, pub)
 	default:
-		panic(fmt.Sprintf("unrecognised outbound operation: %d", m.Operation))
+		panic(fmt.Sprintf("unrecognized outbound operation: %d", m.Operation))
 	}
 }
 

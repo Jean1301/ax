@@ -39,7 +39,7 @@ type channel struct {
 // received.
 //
 // It returns an error if the broker does not acknowledge publication of the
-// message. Otherwise it has the same behaviour as amqp.Channel.Publish().
+// message. Otherwise it has the same behavior as amqp.Channel.Publish().
 func (p *Publisher) Publish(
 	ctx context.Context,
 	exchange string,

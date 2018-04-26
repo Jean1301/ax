@@ -4,16 +4,15 @@ import (
 	"context"
 	"sync"
 
-	"github.com/jmalloc/ax/src/ax/pipeline"
-	"github.com/jmalloc/ax/src/ax/transport"
+	"github.com/jmalloc/ax/src/ax/bus"
 )
 
 // Endpoint is a named endpoint participating in the exchange of messages.
 type Endpoint struct {
 	Name             string
-	Transport        transport.Transport
-	InboundPipeline  pipeline.InboundStage
-	OutboundPipeline pipeline.OutboundStage
+	Transport        bus.Transport
+	InboundPipeline  bus.InboundPipeline
+	OutboundPipeline bus.OutboundPipeline
 
 	wg sync.WaitGroup
 }
@@ -37,7 +36,7 @@ func (ep *Endpoint) Run(ctx context.Context) error {
 	}
 
 	var (
-		m   transport.InboundMessage
+		m   bus.InboundMessage
 		err error
 	)
 
@@ -56,10 +55,20 @@ func (ep *Endpoint) Run(ctx context.Context) error {
 	return err
 }
 
-func (ep *Endpoint) process(ctx context.Context, m transport.InboundMessage) {
+func (ep *Endpoint) process(ctx context.Context, m bus.InboundMessage) {
 	defer ep.wg.Done()
 
-	if err := ep.InboundPipeline.DispatchMessage(ctx, ep.OutboundPipeline, m); err != nil {
+	err := ep.InboundPipeline.DispatchMessage(ctx, ep.OutboundPipeline, m)
+
+	if err == nil {
+		err = m.Done(ctx, bus.OpAck)
+	} else if m.DeliveryCount < 3 {
+		err = m.Done(ctx, bus.OpRetry)
+	} else {
+		err = m.Done(ctx, bus.OpReject)
+	}
+
+	if err != nil {
 		panic(err)
 	}
 }

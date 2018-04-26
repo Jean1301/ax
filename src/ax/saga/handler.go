@@ -1,11 +1,8 @@
 package saga
 
 import (
-	"context"
-	"errors"
-
 	"github.com/jmalloc/ax/src/ax"
-	"github.com/jmalloc/ax/src/ax/outbox"
+	"github.com/jmalloc/ax/src/ax/persistence"
 )
 
 // MessageHandler is an implementation of ax.MessageHandler that handles the
@@ -13,7 +10,6 @@ import (
 type MessageHandler struct {
 	Repository Repository
 	Saga       Saga
-	Storage    ax.Storage
 
 	triggers ax.MessageTypeSet
 }
@@ -45,28 +41,25 @@ func (h *MessageHandler) HandleMessage(ctx ax.MessageContext, m ax.Message) erro
 		return err
 	}
 
-	// fetch the outbox transaction from the ctx, or start a new transaction
-	// if none is present.
-	tx, ownTx, err := h.getTransaction(ctx)
+	tx, err := persistence.GetOrBeginTx(ctx)
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback()
 
-	if ownTx {
-		defer tx.Rollback()
-	}
-
-	hctx := WithTransaction(ctx, tx)
+	hctx := ax.WithContext(
+		persistence.WithTx(ctx, tx),
+		ctx,
+	)
 
 	// if no existing instance is found, and this message type does not produce
 	// new instances, then the not-found handler is called.
 	if !ok && !h.triggers.Has(mt) {
-		return h.Saga.HandleNotFound(ctx, m)
+		return h.Saga.HandleNotFound(hctx, m)
 	}
 
-
 	// pass the message to the saga for handling.
-	if err := h.Saga.HandleMessage(ctx, m, si); err != nil {
+	if err := h.Saga.HandleMessage(hctx, m, si); err != nil {
 		return err
 	}
 
@@ -80,27 +73,5 @@ func (h *MessageHandler) HandleMessage(ctx ax.MessageContext, m ax.Message) erro
 		return err
 	}
 
-	if ownTx {
-		return tx.Commit()
-	}
-
-	return nil
-}
-
-func (h *MessageHandler) getTransaction(ctx context.Context) (ax.Transaction, bool, error) {
-	if tx, ok := outbox.GetTransaction(ctx); ok {
-		return tx, false, nil
-	}
-
-	if h.storage == nil {
-		return nil, false, errors.New(
-			"cannot persist saga state, ",
-		)
-	}
-		tx, err = h.Storage.Tx(ctx)
-		if err != nil {
-			return err
-		}
-		defer tx.Rollback()
-	}
+	return tx.Commit()
 }

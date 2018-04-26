@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/jmalloc/ax/src/ax"
+	"github.com/jmalloc/ax/src/ax/persistence"
 )
 
 // Repository is an interface for loading and saving saga instances to/from a
@@ -33,7 +34,7 @@ type Repository interface {
 	// uses a different underlying storage system.
 	SaveSagaInstance(
 		ctx context.Context,
-		tx ax.Transaction,
+		tx persistence.Tx,
 		si Instance,
 		mt MappingTable,
 	) error

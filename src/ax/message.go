@@ -2,7 +2,6 @@ package ax
 
 import (
 	"reflect"
-	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/jmalloc/ax/src/ax/ident"
@@ -11,29 +10,6 @@ import (
 // MessageID uniquely identifies a message.
 type MessageID struct {
 	ident.ID
-}
-
-// Envelope is a container for a message and its meta-data.
-type Envelope struct {
-	MessageID     MessageID
-	CorrelationID MessageID
-	CausationID   MessageID
-	Time          time.Time
-	Message       Message
-}
-
-// New returns a new message envelope that contains m.
-// m is "caused by" e.Message.
-func (e Envelope) New(m Message) Envelope {
-	env := Envelope{
-		CorrelationID: e.CorrelationID,
-		CausationID:   e.MessageID,
-		Time:          time.Now(),
-	}
-
-	env.MessageID.GenerateUUID()
-
-	return env
 }
 
 // Message is a unit of communication.

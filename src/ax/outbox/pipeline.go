@@ -3,24 +3,28 @@ package outbox
 import (
 	"context"
 
-	"github.com/jmalloc/ax/src/ax"
-	"github.com/jmalloc/ax/src/ax/pipeline"
+	"github.com/jmalloc/ax/src/ax/bus"
+	"github.com/jmalloc/ax/src/ax/persistence"
 )
 
 // InboundStage is a pipeline.InboundStage that provides message idempotency
 // guarantees to the next pipeline stage by using the outbox pattern.
 type InboundStage struct {
-	Next       pipeline.InboundStage
-	Storage    ax.Storage
 	Repository Repository
+	Next       bus.InboundPipeline
+}
+
+// Initialize is called when the transport is initialized.
+func (s *InboundStage) Initialize(ctx context.Context, t bus.Transport) error {
+	return s.Next.Initialize(ctx, t)
 }
 
 // DispatchMessage passes m to each handler in s.Handler and persists the
 // messages they produce to an outbox, before dispatching them via o.
 func (s *InboundStage) DispatchMessage(
 	ctx context.Context,
-	o pipeline.OutboundStage,
-	m pipeline.InboundMessage,
+	out bus.OutboundDispatcher,
+	m bus.InboundMessage,
 ) error {
 	outbox, ok, err := s.Repository.LoadOutbox(
 		ctx,
@@ -38,7 +42,7 @@ func (s *InboundStage) DispatchMessage(
 	}
 
 	for _, om := range outbox {
-		if err := s.dispatch(ctx, o, om); err != nil {
+		if err := s.dispatch(ctx, out, om); err != nil {
 			return err
 		}
 	}
@@ -48,19 +52,19 @@ func (s *InboundStage) DispatchMessage(
 
 func (s *InboundStage) forward(
 	ctx context.Context,
-	m pipeline.InboundMessage,
-) ([]pipeline.OutboundMessage, error) {
-	tx, err := s.Storage.Tx(ctx)
+	m bus.InboundMessage,
+) ([]bus.OutboundMessage, error) {
+	tx, err := persistence.BeginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	var o OutboundStage
+	var out bus.MessageCollector
 
 	if err := s.Next.DispatchMessage(
-		WithTransaction(ctx, tx),
-		&o,
+		persistence.WithTx(ctx, tx),
+		&out,
 		m,
 	); err != nil {
 		return nil, err
@@ -70,26 +74,26 @@ func (s *InboundStage) forward(
 		ctx,
 		tx,
 		m.Envelope.MessageID,
-		o.Outbox,
+		out.Messages,
 	); err != nil {
 		return nil, err
 	}
 
-	return o.Outbox, tx.Commit()
+	return out.Messages, tx.Commit()
 }
 
 // dispatch dispatches m via o and then records the fact that the message has
 // been dispatched in the outbox.
 func (s *InboundStage) dispatch(
 	ctx context.Context,
-	o pipeline.OutboundStage,
-	m pipeline.OutboundMessage,
+	out bus.OutboundDispatcher,
+	m bus.OutboundMessage,
 ) error {
-	if err := o.DispatchMessage(ctx, m); err != nil {
+	if err := out.DispatchMessage(ctx, m); err != nil {
 		return err
 	}
 
-	tx, err := s.Storage.Tx(ctx)
+	tx, err := persistence.BeginTx(ctx)
 	if err != nil {
 		return err
 	}
